@@ -14,6 +14,7 @@ var l;  // logger
 
 configlib.configFile(process.argv[2], function (conf, oldConfig) {
   config = conf;
+  var healthStatus = config.healthStatus || 'up';
   var udp_version = config.udp_version
     ,       nodes = config.nodes;
   l = new logger.Logger(config.log || {});
@@ -107,6 +108,61 @@ configlib.configFile(process.argv[2], function (conf, oldConfig) {
       client.send(msg, 0, msg.length, host_config[1], host_config[0]);
     }
   });
+
+
+  var mgmtServer = net.createServer(function(stream) {
+    stream.setEncoding('ascii');
+    stream.on('error', function(err) {
+      log('Caught ' + err + ' on admin interface, moving on');
+    });
+    stream.on('data', function(data) {
+      var cmdline = data.trim().split(" ");
+      var cmd = cmdline.shift();
+      switch(cmd) {
+        case "help":
+          stream.write("Commands: health, quit\n\n");
+          break;
+        case "health":
+          if (cmdline.length > 0) {
+            var cmdaction = cmdline[0].toLowerCase();
+            if (cmdaction == 'up') {
+              healthStatus = 'up';
+            } else if (cmdaction == 'down') {
+              healthStatus = 'down';
+            }
+          }
+          stream.write("health: " + healthStatus + "\n");
+
+          var node_healthy_count = 0;
+          var node_unhealthy_count = 0;
+          var node_unknown_count = 0;
+          nodes.forEach(function(element, index, array) {
+            var key = element.host + ':' + element.port;
+            if (node_status[key] === undefined) {
+              node_unknown_count += 1;
+            } else if (node_status[key] == 0) {
+              node_healthy_count += 1;
+            } else {
+              node_unhealthy_count += 1;
+            }
+          });
+          stream.write("healthy nodes  : " + node_healthy_count + "\n");
+          stream.write("unhealthy nodes: " + node_unhealthy_count + "\n");
+          stream.write("unknown nodes  : " + node_unknown_count + "\n");
+
+          break;
+        case  "quit":
+          stream.end();
+          break;
+        default:
+          stream.write("ERROR\n");
+          break;
+      }
+    });
+  });
+
+  // Hook the listening tcp server up to the admin port and host
+  mgmtServer.listen(config.admin_port || 8126, config.admin_host || undefined);
 
   // Bind the listening udp server to the configured port and host
   server.bind(config.port, config.host || undefined);

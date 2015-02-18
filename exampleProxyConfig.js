@@ -12,6 +12,9 @@ Optional Variables:
 
   udp_version:      defines if the address is an IPv4 or IPv6 address ['udp4' or 'udp6', default: 'udp4']
   host:             address to listen on over UDP [default: 0.0.0.0]
+  mgmt_host:        address to run the management TCP interface on [default: 0.0.0.0]
+  mgmt_port:        port to run the management TCP interface on [default: 8126]
+  healthStatus:     default health status to be returned when statsd process starts ['up' or 'down', default: 'up']
   checkInterval:    health status check interval [default: 10000]
   cacheSize:        size of the cache to store for hashring key lookups [default: 10000]
   forkCount:        number of child processes (cluster module), number or 'auto' for utilize all cpus [default:0]
@@ -27,6 +30,11 @@ udp_version: 'udp4',
 host:  '0.0.0.0',
 port: 8125,
 forkCount: 0,
+
+admin_host: '0.0.0.0',
+admin_port: 8126,
+healthStatus: 'up',
+
 checkInterval: 1000,
 cacheSize: 10000
 }
