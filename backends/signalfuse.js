@@ -124,6 +124,7 @@ var flush_stats = function signalfuse_flush(ts, metrics) {
 
   for (key in counters) {
     l.log("Processing counter");
+    if (key.indexOf('dev7') != -1) continue;
     var value = counters[key];
     var valuePerSecond = counter_rates[key]; // pre-calculated "per second" rate
     var parsed_key = parse_key(key);
@@ -151,6 +152,7 @@ var flush_stats = function signalfuse_flush(ts, metrics) {
   }
 
   for (key in timer_data) {
+    if (key.indexOf('dev7') != -1) continue;
     var parsed_key = parse_key(key);
     var keyName = parsed_key['metric_name'];
     var tags = parsed_key['tags'];
@@ -183,6 +185,7 @@ var flush_stats = function signalfuse_flush(ts, metrics) {
   }
 
   for (key in gauges) {
+    if (key.indexOf('dev7') != -1) continue;
     l.log("Processing gauge");
     var parsed_key = parse_key(key);
     var keyName = parsed_key['metric_name'];
@@ -200,6 +203,7 @@ var flush_stats = function signalfuse_flush(ts, metrics) {
   }
 
   for (key in sets) {
+    if (key.indexOf('dev7') != -1) continue;
     var parsed_key = parse_key(key);
     var keyName = parsed_key['metric_name'];
     var tags = parsed_key['tags'];
