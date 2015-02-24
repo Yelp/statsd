@@ -33,7 +33,7 @@ var prefixGauge;
 var prefixSet;
 var globalSuffix;
 var prefixStats;
-var globalKeySanitize = true;
+var globalKeySanitize = false;
 
 // set up namespaces
 var legacyNamespace  = true;
@@ -103,9 +103,19 @@ var flush_stats = function graphite_flush(ts, metrics) {
     if (globalKeySanitize) {
       return key;
     } else {
-      return key.replace(/\s+/g, '_')
+      key = key.replace(/\s+/g, '_')
                 .replace(/\//g, '-')
-                .replace(/[^a-zA-Z_\-0-9\.]/g, '');
+                .replace(/[^a-zA-Z_\-0-9=\.]/g, '');
+
+      parts = key.split('.');
+      metric_name = parts[0];
+      for (i = 1; i < parts.length; i++) {
+        if (parts[i].indexOf('=') == -1) {
+          metric_name += '.' + parts[i];
+        } else {
+          metric_name += '.' + parts[i].split('=')[1];
+        }
+      }
     }
   };
 
