@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+var to_run=['test/']
+
+if (process.argv.length > 2) {
+  process.argv.splice(0,2);
+  to_run = process.argv
+}
+
 try {
     var reporter = require('nodeunit').reporters.default;
 }
@@ -9,6 +16,6 @@ catch(e) {
 }
 
 process.chdir(__dirname);
-reporter.run(['test/'], null, function(failure) {
+reporter.run(to_run, null, function(failure) {
    process.exit(failure ? 1 : 0)
 });
