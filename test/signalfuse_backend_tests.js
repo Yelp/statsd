@@ -169,6 +169,56 @@ module.exports.testTimerTransformation = function(test) {
   test.done();
 }
 
+module.exports.testTimerDataTransformation = function(test) {
+  var metrics = {
+    'metrics.are.fun': {
+       count_90: 1,
+       upper_90: 2,
+       mean_90: 3,
+       sum_90: 4,
+       sum_squares_90: 5,
+       std: 6,
+       upper: 7,
+       lower: 8,
+       count: 9,
+       count_ps: 10,
+       sum: 11,
+       sum_squares: 12,
+       mean: 13,
+       median: 14,
+       something_new: 15
+    }
+  };
+
+  var inst = sfx.init(0, buildConfig(), createEmitter(), getLogger());
+  var results = inst.transformTimerData(metrics);
+
+  test.equal(results.length, 15);
+  for(i = 0; i < results.length; i++){
+    var m = results[i];
+    switch(m['metric']) {
+       case 'sfx_test.metrics.are.fun.count_90': test.equal(m['value'], 1); break;
+       case 'sfx_test.metrics.are.fun.upper_90': test.equal(m['value'], 2); break;
+       case 'sfx_test.metrics.are.fun.mean_90': test.equal(m['value'], 3); break;
+       case 'sfx_test.metrics.are.fun.sum_90': test.equal(m['value'], 4); break;
+       case 'sfx_test.metrics.are.fun.sum_squares_90': test.equal(m['value'], 5); break;
+       case 'sfx_test.metrics.are.fun.std': test.equal(m['value'], 6); break;
+       case 'sfx_test.metrics.are.fun.upper': test.equal(m['value'], 7); break;
+       case 'sfx_test.metrics.are.fun.lower': test.equal(m['value'], 8); break;
+       case 'sfx_test.metrics.are.fun.count': test.equal(m['value'], 9); break;
+       case 'sfx_test.metrics.are.fun.count_ps': test.equal(m['value'], 10); break;
+       case 'sfx_test.metrics.are.fun.sum': test.equal(m['value'], 11); break;
+       case 'sfx_test.metrics.are.fun.sum_squares': test.equal(m['value'], 12); break;
+       case 'sfx_test.metrics.are.fun.mean': test.equal(m['value'], 13); break;
+       case 'sfx_test.metrics.are.fun.median': test.equal(m['value'], 14); break;
+       case 'sfx_test.metrics.are.fun.something_new': test.equal(m['value'], 15); break;
+       default: test.ok(false, "Unknown metric: " + JSON.stringify(m));
+    }
+  }
+
+  test.done();
+}
+
 function checkYourself(test, actualMetricList, expectedMetricList) {
   var expectedMap = {};
 

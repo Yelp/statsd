@@ -103,6 +103,39 @@ SignalFuseBackend.prototype.parseKey = function(rawkey) {
 }
 
 //
+// handles transforming metrics of shape::
+//
+//  { metricname: { subkey: #, subkey: # ..}, .. }
+//
+// into discrete metrics, that are metricname.subkey = #
+//
+SignalFuseBackend.prototype.transformTimerData = function(timerData) {
+  l.debug('Starting to process ' + Object.keys(timerData).length + ' timers');
+
+  var globalPrefix = this.sfxConfig.globalPrefix;
+  var resultingStats = [];
+
+  for(rawKey in timerData) {
+    if(timerData.hasOwnProperty(rawKey)) {
+      var metricParts = this.parseKey(rawKey);
+      var keyName = metricParts['metricName'];
+      var tags = metricParts['tags'];
+      tags['type'] = 'timerdata';
+
+      for(subKey in timerData[rawKey]) {
+        if(timerData[rawKey].hasOwnProperty(subKey)) {
+          var val = timerData[rawKey][subKey];
+          var fqMetricName = [globalPrefix, keyName, subKey].join('.');
+          resultingStats.push(buildStat(fqMetricName, val, tags));
+        }
+      }
+    }
+  }
+
+  return resultingStats;
+}
+
+//
 // handles transforming metrics of this shape::
 //
 //   { 'metricname': [ #, #, #..], ... }
