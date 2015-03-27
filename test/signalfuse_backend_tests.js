@@ -1,30 +1,16 @@
 var sfx = require('../backends/sfx_replace.js');
 
 // generic configuration
-function buildConfig() {
+function createConfig() {
   return {
     debug: true,
     flush_counts: true,
     signalfuse: {
       host: "sfxhost",
-      port: -123,
-      token: "sfxtoken",
+      port: 33333,
+      token: "there are many tokens, but this one is mine",
       globalPrefix: "sfx_test"
     }
-  };
-}
-
-// helper method to make a shell in the right format
-function genericMetric() {
-  return {
-    counters: {},
-    guages: {},
-    timers: {},
-    sets: {},
-    counter_rates: {},
-    timer_data: {},
-    statsd_metrics: {},
-    pctThreshold: 0
   };
 }
 
@@ -53,29 +39,166 @@ function createEmitter() {
   return emitter;
 }
 
+function createFakeRequest() {
+  var fakeRequest = {
+    callToArgs: {},
+    callToCount: {},
+    logCall: function(methodname, args) {
+      var storage = this.callToArgs[methodname] || [];
+      storage.push(args);
+      this.callToArgs[methodname] = storage;
+      var callCount = this.callToCount[methodname] || 0;
+      callCount += 1;
+      this.callToCount[methodname] = callCount;
+    },
+    write: function(asString) {
+      this.logCall('write', [asString]);
+    },
+    done: function() {
+      this.logCall('done', []);
+    }
+  };
+
+  return fakeRequest;
+}
+
+function checkYourself(test, actualMetricList, expectedMetricList) {
+  var expectedMap = {};
+
+  test.equal(actualMetricList.length, expectedMetricList.length);
+
+  // create a map of the expected
+  for (var ek = 0; ek < expectedMetricList.length; ek++) {
+    var em = expectedMetricList[ek];
+    expectedMap[em['metric']] = em;
+  }
+
+  for (var k = 0; k < actualMetricList.length; k++) {
+    var m = actualMetricList[k];
+    test.deepEqual(m, expectedMap[m['metric']]);
+  }
+}
+
+function checkTwoMaps(test, actualMap, expectedMap) {
+  test.deepEqual(typeof(actualMap), 'object', "actual map is not an object");
+  test.deepEqual(typeof(expectedMap), 'object', "expected map is not an object");
+  test.equal(Object.keys(actualMap).length,
+             Object.keys(expectedMap).length);
+
+
+  for(key in expectedMap) {
+    if(expectedMap.hasOwnProperty(key)) {
+      if(typeof(expectedMap[key]) === 'object') {
+        checkTwoMaps(test, actualMap[key], expectedMap[key]);
+      } else {
+        test.equal(actualMap[key], expectedMap[key], "Mismatch on key: " + key);
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // TESTS
 // ---------------------------------------------------------------------------
-//module.exports.testTest = function(test) {
-//  var emitter = createEmitter();
-//  var m = genericMetric();
-//  m['counters'][metricKey] = counterVal;
-//
-//  var validateFcn = function(dict) {
-//
-//  }
-//
-//  var inst = sfx.init(0, config, emitter, console);
-//  inst.post = validateFcn; // override the actual write
-//
-//  // use the emitter b/c it is what is *really* called
-//  emitter.flush(123, m);
-//
-//  test.done();
-//}
+module.exports.testFlush = function(test) {
+  var emitter = createEmitter();
+  var m = {
+    counters: {
+      'test.counter': 3,
+      'with.a=tag': 4
+    },
+    gauges: {
+      'test.g': 5,
+    },
+    timers: {
+      'test-timer': [10, 11, 12]
+    },
+    sets: {
+      'tea-set': 43
+    },
+    counter_rates: {
+      'test.rate': 239,
+      'something.else': 234,
+    },
+    timer_data: {
+      'sometimer': { 'math': 4, 'is': 3, 'fun': 23}
+    },
+    statsd_metrics: {
+      'this.is.ignored': 4
+    },
+    pctThreshold: 42
+  };
+
+  var results = []
+  var collector = function(metricsToSend) {
+    Array.prototype.push.apply(results, metricsToSend);
+  }
+
+  var inst = sfx.init(0, createConfig(), emitter, getLogger());
+  inst.post = collector; // override the actual write
+
+  // use the emitter b/c it is what is *really* called
+  emitter.flush(123, m);
+
+  // 2 counters, 1 gauge, 3 timers, 1 set, 2 rates, 3 timerdata
+  test.equal(results.length, 12);
+
+  // only what we expect explicitly
+  for(i = 0; i < results.length; i++) {
+    var m = results[i];
+    var val = m['value'];
+    var dim = m['dimensions'];
+    switch(m['metric']) {
+      case 'sfx_test.test.counter':
+        test.equal(val, 3);
+        test.deepEqual(dim, {type:'counter'});
+        break;
+      case 'sfx_test.with':
+        test.equal(val, 4);
+        test.deepEqual(dim, {type:'counter', a:'tag'});
+        break;
+      case 'sfx_test.test.g':
+        test.equal(val, 5);
+        test.deepEqual(dim, {type:'gauge'});
+        break;
+      case 'sfx_test.tea-set':
+        test.equal(val, 43);
+        test.deepEqual(dim, {type:'set'});
+        break;
+      case 'sfx_test.test-timer':
+        test.ok([10, 11, 12].indexOf(val) >= 0, "Timer value wrong: " + val);
+        test.deepEqual(dim, {type:'timer'});
+        break;
+      case 'sfx_test.test.rate':
+        test.equal(val, 239);
+        test.deepEqual(dim, {type:'rate'});
+        break;
+      case 'sfx_test.something.else':
+        test.equal(val, 234);
+        test.deepEqual(dim, {type:'rate'});
+        break;
+      case 'sfx_test.sometimer.math':
+        test.equal(val, 4);
+        test.deepEqual(dim, {type:'timerdata'});
+        break;
+      case 'sfx_test.sometimer.is':
+        test.equal(val, 3);
+        test.deepEqual(dim, {type:'timerdata'});
+        break;
+      case 'sfx_test.sometimer.fun':
+        test.equal(val, 23);
+        test.deepEqual(dim, {type:'timerdata'});
+        break;
+      default:
+        test.ok(false, "Unknown metric found: " + JSON.stringify(m));
+    }
+  }
+
+  test.done();
+}
 
 module.exports.testKeyParsing = function(test) {
-  var inst = sfx.init(0, buildConfig(), createEmitter(), getLogger());
+  var inst = sfx.init(0, createConfig(), createEmitter(), getLogger());
 
   var res = inst.parseKey('metricstart.tagN1=tagV1.othermetric part');
   test.equal(res['metricName'], 'metricstart.othermetric_part');
@@ -93,7 +216,7 @@ module.exports.testKeyParsing = function(test) {
 }
 
 module.exports.testGenericTransformation = function(test) {
-  var inst = sfx.init(0, buildConfig(), createEmitter(), getLogger());
+  var inst = sfx.init(0, createConfig(), createEmitter(), getLogger());
 
   var metrics = {
     'this.is.my.metric': 123,
@@ -142,7 +265,7 @@ module.exports.testTimerTransformation = function(test) {
     'hearts.stars.and=rainbows': [7, 8, 9]
   };
 
-  var inst = sfx.init(0, buildConfig(), createEmitter(), getLogger());
+  var inst = sfx.init(0, createConfig(), createEmitter(), getLogger());
   var results = inst.transformTimers(metrics);
 
   test.equal(results.length, 6);
@@ -190,7 +313,7 @@ module.exports.testTimerDataTransformation = function(test) {
     }
   };
 
-  var inst = sfx.init(0, buildConfig(), createEmitter(), getLogger());
+  var inst = sfx.init(0, createConfig(), createEmitter(), getLogger());
   var results = inst.transformTimerData(metrics);
 
   test.equal(results.length, 15);
@@ -219,19 +342,94 @@ module.exports.testTimerDataTransformation = function(test) {
   test.done();
 }
 
-function checkYourself(test, actualMetricList, expectedMetricList) {
-  var expectedMap = {};
+module.exports.testPost = function(test) {
 
-  test.equal(actualMetricList.length, expectedMetricList.length);
+  var expectedRequestsMade = 0;
+  var postOptions = undefined;
+  var postcb = undefined;
+  var fakeRequest = createFakeRequest()
 
-  // create a map of the expected
-  for (var ek = 0; ek < expectedMetricList.length; ek++) {
-    var em = expectedMetricList[ek];
-    expectedMap[em['metric']] = em;
-  }
+  var fakeHttp = {
+    request: function(options, callback) {
+      postOptions = options;
+      postcb = callback;
+      expectedRequestsMade += 1;
+      return fakeRequest;
+    }
+  };
 
-  for (var k = 0; k < actualMetricList.length; k++) {
-    var m = actualMetricList[k];
-    test.deepEqual(m, expectedMap[m['metric']]);
-  }
+  var metricList = [
+    {metric: 'a.metric.name1', value: 4, dimensions: {type: 'hands'}},
+    {metric: 'a.metric.name2', value: 5, dimensions: {type: 'shoulders'}},
+    {metric: 'a.metric.name3', value: 6, dimensions: {type: 'knees'}},
+    {metric: 'a.metric.name4', value: 7, dimensions: {type: 'toes'}}
+  ];
+  var expectedPostData = {gauge: metricList};
+
+  var config = createConfig();
+  var inst = sfx.init(0, config, createEmitter(), getLogger());
+  inst.getConfig().http = fakeHttp;
+  inst.post(metricList, config.signalfuse);
+
+  test.equal(expectedRequestsMade, 1,
+            "Created the wrong number of requests: " + expectedRequestsMade);
+  test.equal(fakeRequest.callToCount['done'], 1);
+  test.equal(fakeRequest.callToCount['write'], 1);
+  test.equal(fakeRequest.callToArgs['write'][0], JSON.stringify(expectedPostData));
+
+  checkTwoMaps(test, postOptions, {
+    host: 'sfxhost',
+    port: 33333,
+    method: 'POST',
+    path: '/v2/datapoint',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-SF-Token': 'there are many tokens, but this one is mine'
+    }
+  });
+
+  test.done();
+}
+
+module.exports.testEndToEnd = function(test) {
+  var testport = 123;
+
+  var input = {
+    counters: {'metrics': 24},
+    sets: {'are.rando=tag':234},
+    timers: {'fun':[222]},
+    counter_rates: {'yaaaay': 87},
+    gauges: {},
+    timer_data: {},
+    statsd_metrics: {},
+    pctThreshold: 42
+  };
+
+  var expectedPostData = {gauge:
+    [
+      {metric: 'sfx_test.metrics', value: 24, dimensions: {type: 'counter'}},
+      {metric: 'sfx_test.are', value: 234, dimensions: {type: 'set', rando: 'tag'}},
+      {metric: 'sfx_test.fun', value: 222, dimensions: {type: 'timer'}},
+      {metric: 'sfx_test.yaaaay', value:87, dimensions: {type: 'rate'}},
+    ]
+  };
+
+  var emitter = createEmitter();
+  var config = createConfig();
+  var fakeRequest = createFakeRequest();
+  var fakeHttp = {
+    request: function(options, handler) {
+      return fakeRequest;
+    }
+  };
+
+  var inst = sfx.init(0, config, emitter, getLogger());
+  inst.getConfig().http = fakeHttp;
+  emitter['flush'](123, input);
+
+  test.equal(fakeRequest.callToCount['done'], 1);
+  test.equal(fakeRequest.callToCount['write'], 1);
+//  test.equal(fakeRequest.callToArgs['write'][0], JSON.stringify(expectedPostData));
+
+  test.done();
 }

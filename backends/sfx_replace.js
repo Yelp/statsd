@@ -21,7 +21,8 @@
  *
  */
 
-var http = require('https');
+var http = require('http');
+var net = require('net');
 
 var l; // the logger
 var debug;
@@ -44,7 +45,15 @@ function SignalFuseBackend(startup_time, config, emitter) {
   var c = config.signalfuse || {};
 
   this.sfxConfig = c;
-  this.config = config || {};
+  this.sfxConfig.dryrun = this.sfxConfig.dryrun || false;
+  this.sfxConfig.host = this.sfxConfig.host || "";
+  this.sfxConfig.port = this.sfxConfig.port ||-1;
+  this.sfxConfig.token = this.sfxConfig.token || "";
+  this.sfxConfig.globalPrefix = this.sfxConfig.globalPrefix || "";
+
+  this.sfxConfig.http = http;
+  this.sfxConfig.onComplete = this.onComplete;
+  this.sfxConfig.post = this.post;
 
   var self = this;
   emitter.on('flush', function(timestamp, metrics) {
@@ -57,6 +66,14 @@ function SignalFuseBackend(startup_time, config, emitter) {
 
 SignalFuseBackend.prototype.getConfig = function() {
   return this.sfxConfig;
+}
+
+SignalFuseBackend.prototype.buildRequest = function(options, cb) {
+}
+
+SignalFuseBackend.prototype.onComplete = function(response) {
+  l.debug("Finished Flush");
+  l.debug(response);
 }
 
 //
@@ -175,7 +192,7 @@ SignalFuseBackend.prototype.transformTimers = function(timers) {
 // also the tags will get a 'type: type' added
 //
 SignalFuseBackend.prototype.transformMetrics = function(metrics, type) {
-  l.debug('Starting to process ' + Object.keys(metrics).length + ' metrics');
+  l.debug('Starting to process ' + Object.keys(metrics).length + ' ' + type);
 
   var globalPrefix = this.sfxConfig.globalPrefix;
   var resultingStats = [];
@@ -194,19 +211,65 @@ SignalFuseBackend.prototype.transformMetrics = function(metrics, type) {
     }
   }
 
-  l.debug("Finished transforming metrics into " +
+  l.debug("Finished transforming " + type + " into " +
           resultingStats.length + " signalfuse metrics");
 
   return resultingStats;
 };
 
+//
+// Takes each of the different components, transformts them, then ships
+// ships them off
+//
 SignalFuseBackend.prototype.flush = function(timestamp, metric, postcb) {
-  console.log(timestamp + " " + metric  + " " + postcb);
-  postcb({dict: 'dict'});
+  l.debug(timestamp + ' starting a flush');
+
+  var resultingMetrics = [];
+  var partial = [];
+
+  partial = this.transformMetrics(metric.counters, 'counter');
+  Array.prototype.push.apply(resultingMetrics, partial);
+  partial = this.transformMetrics(metric.sets, 'set');
+  Array.prototype.push.apply(resultingMetrics, partial);
+  partial = this.transformMetrics(metric.gauges, 'gauge');
+  Array.prototype.push.apply(resultingMetrics, partial);
+  partial = this.transformMetrics(metric.counter_rates, 'rate');
+  Array.prototype.push.apply(resultingMetrics, partial);
+  partial = this.transformTimers(metric.timers);
+  Array.prototype.push.apply(resultingMetrics, partial);
+  partial = this.transformTimerData(metric.timer_data);
+  Array.prototype.push.apply(resultingMetrics, partial);
+
+  postcb(resultingMetrics, this.sfxConfig);
 }
 
-SignalFuseBackend.prototype.post = function(dict) {
-  console.log('going to post ' +  dict);
+SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
+  l.debug('Sending ' + metricList.length + ' metrics to signal fuse');
+
+  var postOptions = {
+    host: sfxConfig.host,
+    port: sfxConfig.port,
+    path: '/v2/datapoint',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-SF-Token': sfxConfig.token
+    }
+  };
+
+  var postData = JSON.stringify({gauge: metricList});
+  l.debug('Payload will be: ' + postData);
+
+  if (!sfxConfig.dryrun) {
+    var req = sfxConfig.http.request(postOptions, sfxConfig.onComplete);
+    req.write(postData);
+    req.end();
+  } else {
+    l.log('Not sending because of dryrun flag. request:');
+    l.log(postData);
+  }
+
+  l.debug('Finished sending data to signalfx');
 }
 
 SignalFuseBackend.prototype.status = function(callback) {
