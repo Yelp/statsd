@@ -28,17 +28,18 @@ function genericMetric() {
   };
 }
 
+// squash the output
+function getLogger() {
+  return { log: function(msg, level) { ; } }
+  //return console;
+}
+
 function buildStat(name, value, tags) {
   return {
     metric: name,
     value: value,
     dimensions: tags
   }
-}
-
-// for use squashing output
-var devNullLogger = {
-  log: function(msg, level) { ; }
 }
 
 // creates obj that we can use to sim the actual sending of metrics
@@ -51,10 +52,6 @@ function createEmitter() {
   };
   return emitter;
 }
-
-//convienence values
-var metricKeyWithTags = "this.is.my.rifle=gun";
-var metricKey = "this.is.my.metric";
 
 // ---------------------------------------------------------------------------
 // TESTS
@@ -77,62 +74,8 @@ var metricKey = "this.is.my.metric";
 //  test.done();
 //}
 
-module.exports.testNamespaceMunging = function(test) {
-
-  var inst = sfx.init(0, buildConfig(), createEmitter(), console);
-  var sfxConfig = inst.getConfig();
-
-  test.notEqual(sfxConfig, {});
-  test.notEqual(sfxConfig.namespaces, {});
-  test.deepEqual(sfxConfig.namespaces.counter, ['sfx_test', 'counter']);
-  test.deepEqual(sfxConfig.namespaces.timer, ['sfx_test', 'timer']);
-  test.deepEqual(sfxConfig.namespaces.gauge, ['sfx_test', 'gauge']);
-  test.deepEqual(sfxConfig.namespaces.set, ['sfx_test', 'set']);
-
-  // test that if we do set something we keep it
-  var updatedConfig = {
-    signalfuse: {
-      namespaces: {
-        counter: ['something different'],
-        timer: ['diff timer', 'anotherlayer']
-      }
-    }
-  };
-
-  inst = sfx.init(0, updatedConfig, createEmitter(), console);
-  sfxConfig = inst.getConfig();
-  // these should be pop'd w/only the type - we didn't put a globalPrefix
-  test.deepEqual(sfxConfig.namespaces.gauge, ['gauge']);
-  test.deepEqual(sfxConfig.namespaces.set, ['set']);
-  // these should match us
-  test.deepEqual(sfxConfig.namespaces.counter, ['something different']);
-  test.deepEqual(sfxConfig.namespaces.timer, ['diff timer', 'anotherlayer']);
-
-  // test that we always prepend the globalPrefix if it is there
-  var withGlobalPrefix = {
-    signalfuse: {
-      globalPrefix: "globalprefix",
-      namespaces: {
-        counter: ['notthewordcounter'],
-        timer: ['timer', 'special']
-      }
-    }
-  };
-
-  inst = sfx.init(0, withGlobalPrefix, createEmitter(), console);
-  sfxConfig = inst.getConfig();
-  // auto w/global prefix
-  test.deepEqual(sfxConfig.namespaces.gauge, ['globalprefix', 'gauge']);
-  test.deepEqual(sfxConfig.namespaces.set, ['globalprefix', 'set']);
-  test.deepEqual(sfxConfig.namespaces.counter, ['globalprefix', 'notthewordcounter']);
-  test.deepEqual(sfxConfig.namespaces.timer, ['globalprefix', 'timer', 'special']);
-
-  test.done();
-}
-
 module.exports.testKeyParsing = function(test) {
-  var inst = sfx.init(0, buildConfig(), createEmitter(), console);
-
+  var inst = sfx.init(0, buildConfig(), createEmitter(), getLogger());
 
   var res = inst.parseKey('metricstart.tagN1=tagV1.othermetric part');
   test.equal(res['metricName'], 'metricstart.othermetric_part');
@@ -149,46 +92,79 @@ module.exports.testKeyParsing = function(test) {
   test.done();
 }
 
-module.exports.testCounterTransformation = function(test) {
-  var inst = sfx.init(0, buildConfig(), createEmitter(), console);
-  var counters= {};
-  var counterRates= {};
+module.exports.testGenericTransformation = function(test) {
+  var inst = sfx.init(0, buildConfig(), createEmitter(), getLogger());
 
-  counters[metricKey] = 123;
-  counterRates[metricKey] = 32;
-
-  counters[metricKeyWithTags] = 453;
-  counterRates[metricKeyWithTags] = 23;
-
+  var metrics = {
+    'this.is.my.metric': 123,
+    'this.is.my.rifle=gun': 453
+  };
 
   // what we should get
   var expected = [];
-  expected.push(buildStat('sfx_test.counter.this.is.my.metric.rate', 32, {}));
-  expected.push(buildStat("sfx_test.counter.this.is.my.metric", 123, {}));
-  expected.push(buildStat('sfx_test.counter.this.is.my', 453, {rifle:'gun'}));
-  expected.push(buildStat('sfx_test.counter.this.is.my.rate', 23, {rifle:'gun'}));
+  var result = [];
 
-  var result = inst.transformCounters(counters, counterRates);
+  expected = [
+    buildStat("sfx_test.this.is.my.metric", 123, {type:'gauge'}),
+    buildStat('sfx_test.this.is.my', 453, {type:'gauge', rifle:'gun'})
+  ];
+  result = inst.transformMetrics(metrics, 'gauge');
+  checkYourself(test, result, expected);
 
+  expected = [
+    buildStat('sfx_test.this.is.my.metric', 123, {type:'set'}),
+    buildStat('sfx_test.this.is.my', 453, {type:'set', rifle:'gun'})
+  ];
+  result = inst.transformMetrics(metrics, 'set');
+  checkYourself(test, result, expected);
+
+  expected = [
+    buildStat('sfx_test.this.is.my.metric', 123, {type:'counter'}),
+    buildStat('sfx_test.this.is.my', 453, {type:'counter', rifle:'gun'})
+  ];
+  result = inst.transformMetrics(metrics, 'counter');
+  checkYourself(test, result, expected);
+
+  expected = [
+    buildStat('sfx_test.this.is.my.metric', 123, {type:'rate'}),
+    buildStat('sfx_test.this.is.my', 453, {rifle:'gun', type:'rate'})
+  ];
+  result = inst.transformMetrics(metrics, 'rate');
   checkYourself(test, result, expected);
 
   test.done();
 }
 
-module.exports.testGaugeTransformation = function(test) {
-  var inst = sfx.init(0, buildConfig(), createEmitter(), console);
+module.exports.testTimerTransformation = function(test) {
 
-  var gauges= {};
-  gauges[metricKey] = 123;
-  gauges[metricKeyWithTags] = 453;
+  var metrics = {
+    'metrics.take.time': [4, 5, 6],
+    'hearts.stars.and=rainbows': [7, 8, 9]
+  };
 
-  // what we should get
-  var expected = [];
-  expected.push(buildStat("sfx_test.gauge.this.is.my.metric", 123, {}));
-  expected.push(buildStat('sfx_test.gauge.this.is.my', 453, {rifle:'gun'}));
-  var result = inst.transformGauges(gauges);
+  var inst = sfx.init(0, buildConfig(), createEmitter(), getLogger());
+  var results = inst.transformTimers(metrics);
 
-  checkYourself(test, result, expected);
+  test.equal(results.length, 6);
+
+  for(var i = 0; i < results.length; i++) {
+    var metric = results[i];
+    if(metric['metric'] === 'sfx_test.metrics.take.time') {
+      if([4,5,6].indexOf(metric['value']) < 0) {
+        test.ok(false, "Metric value isn't ok: " + JSON.stringify(metric));
+      }
+
+      test.deepEqual(metric['dimensions'], {type: 'timer'});
+    } else if(metric['metric'] === 'sfx_test.hearts.stars') {
+      if([7,8,9].indexOf(metric['value']) < 0) {
+        test.ok(false, "Metric value isn't ok: " + JSON.stringify(metric));
+      }
+
+      test.deepEqual(metric['dimensions'], {type: 'timer', and:'rainbows'});
+    } else {
+      test.ok(false, "Found an unexpected metric " + JSON.stringify(metric));
+    }
+  }
 
   test.done();
 }

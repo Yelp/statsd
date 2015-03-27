@@ -15,32 +15,9 @@
  *      host: "",
  *      port: #,
  *      token: "",
- *      globalPrefix: "",
- *      namespaces: {
- *        counter: "",
- *        timer: "",
- *        gauge: "",
- *        set: ""
- *      }
+ *      globalPrefix: ""
  *    }
  *  }
- *
- *  namespaces: they are an *optional* config value. They will automatically
- *  be put into their buckets if not specified (e.g. timer for timer, counter for counter...).
- *  for instance::
- *
- *  {
- *    signalfuse: {
- *      globalPrefix: "gp",
- *      namespaces: {
- *        counter: ["not_the_word_counter"]
- *      }
- *    }
- *  }
- *
- *  would result in namespaces:
- *
- *    - gp.timer, gp.set, gp.gauge gp.not_the_word_counter
  *
  */
 
@@ -52,19 +29,9 @@ var debug;
 // ---------------------------------------------------------------------------
 // HELPER functions
 // ---------------------------------------------------------------------------
-function namespaceMunge(namespaceContainer, nameToCheck, global) {
-  if(namespaceContainer[nameToCheck] === undefined) {
-    namespaceContainer[nameToCheck] = global.concat(nameToCheck);
-  } else {
-    // we have a name, but we need to munge it up with the global
-    var ourVal = namespaceContainer[nameToCheck];
-    namespaceContainer[nameToCheck] = global.concat(ourVal);
-  }
-}
-
-function buildStat(namespace, value, tags) {
+function buildStat(name, value, tags) {
   return {
-    metric: namespace.join('.'),
+    metric: name,
     value: value,
     dimensions: tags
   }
@@ -76,13 +43,6 @@ function buildStat(namespace, value, tags) {
 function SignalFuseBackend(startup_time, config, emitter) {
   var c = config.signalfuse || {};
 
-  var globalNamespace = c.globalPrefix ? [c.globalPrefix] : [];
-  // handle some namespacing
-  c.namespaces = c.namespaces || {};
-  namespaceMunge(c.namespaces, 'counter', globalNamespace);
-  namespaceMunge(c.namespaces, 'timer', globalNamespace);
-  namespaceMunge(c.namespaces, 'gauge', globalNamespace);
-  namespaceMunge(c.namespaces, 'set', globalNamespace);
   this.sfxConfig = c;
   this.config = config || {};
 
@@ -139,11 +99,73 @@ SignalFuseBackend.prototype.parseKey = function(rawkey) {
 
   metricName = metricParts.join('.');
 
-  l.debug("Parsed " + rawkey + " into " + metricName +
-          " and tags: " + JSON.stringify(tags));
-
   return {metricName: metricName, tags: tags};
 }
+
+//
+// handles transforming metrics of this shape::
+//
+//   { 'metricname': [ #, #, #..], ... }
+//
+// turns them into discrete events
+//
+SignalFuseBackend.prototype.transformTimers = function(timers) {
+  l.debug('Starting to process ' + Object.keys(timers).length + ' timers');
+
+  var globalPrefix = this.sfxConfig.globalPrefix;
+  var resultingStats = [];
+
+  for(rawKey in timers) {
+    if(timers.hasOwnProperty(rawKey)) {
+      var metricParts = this.parseKey(rawKey);
+      var keyName = metricParts['metricName'];
+      var tags = metricParts['tags'];
+      tags['type'] = 'timer';
+
+      var fqMetricName = [globalPrefix, keyName].join('.')
+      var events = timers[rawKey];
+      for(var i = 0; i < events.length; i++){
+        resultingStats.push(buildStat(fqMetricName, events[i], tags));
+      }
+    }
+  }
+
+  l.debug("Finished transforming metrics into " +
+          resultingStats.length + " signalfuse metrics");
+
+  return resultingStats;
+}
+
+//
+// This will transform gauges, counters, and sets
+// naming goes: globalPrefix.[metricname]
+// also the tags will get a 'type: type' added
+//
+SignalFuseBackend.prototype.transformMetrics = function(metrics, type) {
+  l.debug('Starting to process ' + Object.keys(metrics).length + ' metrics');
+
+  var globalPrefix = this.sfxConfig.globalPrefix;
+  var resultingStats = [];
+
+  for(rawKey in metrics) {
+    if(metrics.hasOwnProperty(rawKey)) {
+      var value = metrics[rawKey];
+
+      var metricParts = this.parseKey(rawKey);
+      var keyName = metricParts['metricName'];
+      var tags = metricParts['tags'];
+      tags['type'] = type;
+
+      var fqMetricName = [globalPrefix, keyName].join('.');
+      resultingStats.push(buildStat(fqMetricName, value, tags));
+    }
+  }
+
+  l.debug("Finished transforming metrics into " +
+          resultingStats.length + " signalfuse metrics");
+
+  return resultingStats;
+};
 
 SignalFuseBackend.prototype.flush = function(timestamp, metric, postcb) {
   console.log(timestamp + " " + metric  + " " + postcb);
@@ -157,68 +179,6 @@ SignalFuseBackend.prototype.post = function(dict) {
 SignalFuseBackend.prototype.status = function(callback) {
     callback.write(0, "Not yet implemented");
 }
-
-//
-// This method will transform GAUGES into the signal fuse metrics
-//
-SignalFuseBackend.prototype.transformGauges = function(gauges) {
-  l.debug('Starting to process ' + Object.keys(gauges).length + ' gauges');
-
-  var gaugeNamespace = this.sfxConfig.namespaces.gauge;
-  var resultingStats = [];
-
-  for(var rawKey in gauges) {
-    if(gauges.hasOwnProperty(rawKey)) {
-      var value = gauges[rawKey];
-
-      var metricParts = this.parseKey(rawKey);
-      var keyName = metricParts['metricName'];
-      var tags = metricParts['tags'];
-
-      var namespace = gaugeNamespace.concat(keyName);
-      resultingStats.push(buildStat(namespace, value, tags));
-    }
-  }
-
-  l.debug("Finished transforming gauges into " +
-          resultingStats.length + " signalfuse metrics");
-
-  return resultingStats;
-};
-
-//
-// This method is intended to handle the counters from a metric. Transforming them
-// into the signalfuse versions after parsing the keys & tags
-//
-SignalFuseBackend.prototype.transformCounters = function(counters, counterRates) {
-  l.debug('Starting to process ' + Object.keys(counters).length + ' counters');
-
-  var counterNamespace = this.sfxConfig.namespaces.counter;
-  var resultingStats = [];
-
-  for(var rawKey in counters) {
-    if(counters.hasOwnProperty(rawKey)) {
-      var value = counters[rawKey];
-      var valuePerSecond = counterRates[rawKey];
-
-      var metricParts = this.parseKey(rawKey);
-      var keyName = metricParts['metricName'];
-      var tags = metricParts['tags'];
-
-      var namespace = counterNamespace.concat(keyName);
-
-      resultingStats.push(buildStat(namespace.concat('rate'), valuePerSecond, tags));
-      if(this.config.flush_counts) {
-        resultingStats.push(buildStat(namespace, value, tags));
-      }
-    }
-  }
-
-  l.debug("Finished transforming counters into " +
-          resultingStats.length + " signalfuse metrics");
-
-  return resultingStats;
-};
 
 // ---------------------------------------------------------------------------
 // export a build method
