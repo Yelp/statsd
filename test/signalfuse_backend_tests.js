@@ -164,11 +164,29 @@ module.exports.testCounterTransformation = function(test) {
   // what we should get
   var expected = [];
   expected.push(buildStat('sfx_test.counter.this.is.my.metric.rate', 32, {}));
-  expected.push(buildStat("sfx_test.counter.this.is.my.metric.count", 123, {}));
-  expected.push(buildStat('sfx_test.counter.this.is.my.count', 453, {rifle:'gun'}));
+  expected.push(buildStat("sfx_test.counter.this.is.my.metric", 123, {}));
+  expected.push(buildStat('sfx_test.counter.this.is.my', 453, {rifle:'gun'}));
   expected.push(buildStat('sfx_test.counter.this.is.my.rate', 23, {rifle:'gun'}));
 
   var result = inst.transformCounters(counters, counterRates);
+
+  checkYourself(test, result, expected);
+
+  test.done();
+}
+
+module.exports.testGaugeTransformation = function(test) {
+  var inst = sfx.init(0, buildConfig(), createEmitter(), console);
+
+  var gauges= {};
+  gauges[metricKey] = 123;
+  gauges[metricKeyWithTags] = 453;
+
+  // what we should get
+  var expected = [];
+  expected.push(buildStat("sfx_test.gauge.this.is.my.metric", 123, {}));
+  expected.push(buildStat('sfx_test.gauge.this.is.my', 453, {rifle:'gun'}));
+  var result = inst.transformGauges(gauges);
 
   checkYourself(test, result, expected);
 

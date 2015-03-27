@@ -53,7 +53,7 @@ var debug;
 // HELPER functions
 // ---------------------------------------------------------------------------
 function namespaceMunge(namespaceContainer, nameToCheck, global) {
-  if (namespaceContainer[nameToCheck] === undefined) {
+  if(namespaceContainer[nameToCheck] === undefined) {
     namespaceContainer[nameToCheck] = global.concat(nameToCheck);
   } else {
     // we have a name, but we need to munge it up with the global
@@ -129,7 +129,7 @@ SignalFuseBackend.prototype.parseKey = function(rawkey) {
   }
 
   for (i = 1; i < parts.length; i++) {
-    if (parts[i].indexOf('=') >= 0) {
+    if(parts[i].indexOf('=') >= 0) {
       var tagParts = parts[i].split('=');
       tags[tagParts[0]] = tagParts[1];
     } else {
@@ -158,6 +158,33 @@ SignalFuseBackend.prototype.status = function(callback) {
     callback.write(0, "Not yet implemented");
 }
 
+//
+// This method will transform GAUGES into the signal fuse metrics
+//
+SignalFuseBackend.prototype.transformGauges = function(gauges) {
+  l.debug('Starting to process ' + Object.keys(gauges).length + ' gauges');
+
+  var gaugeNamespace = this.sfxConfig.namespaces.gauge;
+  var resultingStats = [];
+
+  for(var rawKey in gauges) {
+    if(gauges.hasOwnProperty(rawKey)) {
+      var value = gauges[rawKey];
+
+      var metricParts = this.parseKey(rawKey);
+      var keyName = metricParts['metricName'];
+      var tags = metricParts['tags'];
+
+      var namespace = gaugeNamespace.concat(keyName);
+      resultingStats.push(buildStat(namespace, value, tags));
+    }
+  }
+
+  l.debug("Finished transforming gauges into " +
+          resultingStats.length + " signalfuse metrics");
+
+  return resultingStats;
+};
 
 //
 // This method is intended to handle the counters from a metric. Transforming them
@@ -169,9 +196,8 @@ SignalFuseBackend.prototype.transformCounters = function(counters, counterRates)
   var counterNamespace = this.sfxConfig.namespaces.counter;
   var resultingStats = [];
 
-  for (var rawKey in counters) {
-    if (counters.hasOwnProperty(rawKey)) {
-      l.debug('Processing raw counter key: ' + rawKey);
+  for(var rawKey in counters) {
+    if(counters.hasOwnProperty(rawKey)) {
       var value = counters[rawKey];
       var valuePerSecond = counterRates[rawKey];
 
@@ -182,17 +208,17 @@ SignalFuseBackend.prototype.transformCounters = function(counters, counterRates)
       var namespace = counterNamespace.concat(keyName);
 
       resultingStats.push(buildStat(namespace.concat('rate'), valuePerSecond, tags));
-      if (this.config.flush_counts) {
-        resultingStats.push(buildStat(namespace.concat('count'), value, tags));
+      if(this.config.flush_counts) {
+        resultingStats.push(buildStat(namespace, value, tags));
       }
     }
   }
 
-  l.debug("Finished transforming " + counters.length + " counters into " +
+  l.debug("Finished transforming counters into " +
           resultingStats.length + " signalfuse metrics");
 
   return resultingStats;
-}
+};
 
 // ---------------------------------------------------------------------------
 // export a build method
