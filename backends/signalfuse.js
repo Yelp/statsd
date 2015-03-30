@@ -13,7 +13,6 @@
  *    ...
  *    signalfuse: {
  *      host: "",
- *      port: #,
  *      token: "",
  *      globalPrefix: ""
  *    }
@@ -21,7 +20,7 @@
  *
  */
 
-var http = require('http');
+var http = require('https');
 var util = require('util');
 
 var l; // the logger
@@ -47,7 +46,6 @@ function SignalFuseBackend(startup_time, config, emitter) {
   this.sfxConfig = c;
   this.sfxConfig.dryrun = this.sfxConfig.dryrun || false;
   this.sfxConfig.host = this.sfxConfig.host || "";
-  this.sfxConfig.port = this.sfxConfig.port ||-1;
   this.sfxConfig.token = this.sfxConfig.token || "";
   this.sfxConfig.globalPrefix = this.sfxConfig.globalPrefix || "";
 
@@ -68,12 +66,16 @@ SignalFuseBackend.prototype.getConfig = function() {
   return this.sfxConfig;
 }
 
-SignalFuseBackend.prototype.buildRequest = function(options, cb) {
-}
-
-SignalFuseBackend.prototype.onComplete = function(response) {
-  l.debug("Finished Flush");
-  l.debug(response);
+SignalFuseBackend.prototype.onComplete = function(rsp) {
+  if(rsp.statusCode != 200) {
+    rsp.setEncoding('utf8');
+    l.log('Post to signalfx FAILED ' + rsp.statusCode + " " + rsp.statusMessage);
+    rsp.on('data', function(chunk) {
+      l.log(chunk);
+    });
+  } else {
+    l.debug("Finished Flush to signalfx: " + rsp.statusCode + " " + rsp.statusMessage);
+  }
 }
 
 //
@@ -248,7 +250,6 @@ SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
 
   var postOptions = {
     host: sfxConfig.host,
-    port: sfxConfig.port,
     path: '/v2/datapoint',
     method: 'POST',
     headers: {
@@ -257,7 +258,7 @@ SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
     }
   };
 
-  var out = {guage: metricList};
+  var out = {gauge: metricList};
   var postData = JSON.stringify(out);
 
   l.debug('Payload will be: ' + util.inspect(out, {depth:5, colors:true}));
@@ -266,6 +267,7 @@ SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
     var req = sfxConfig.http.request(postOptions, sfxConfig.onComplete);
     req.write(postData);
     req.end();
+    l.debug(req.output);
   } else {
     l.log('Not sending because of dryrun flag. request:');
     l.log(postData);
