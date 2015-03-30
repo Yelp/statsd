@@ -47,7 +47,13 @@ function SignalFuseBackend(startup_time, config, emitter) {
   this.sfxConfig.dryrun = this.sfxConfig.dryrun || false;
   this.sfxConfig.host = this.sfxConfig.host || "";
   this.sfxConfig.token = this.sfxConfig.token || "";
-  this.sfxConfig.globalPrefix = this.sfxConfig.globalPrefix || "";
+
+  // add the '.' so that we can just jam keys onto the end
+  if(this.sfxConfig.globalPrefix == "" || this.sfxConfig.globalPrefix === undefined) {
+    this.sfxConfig.globalPrefix = "";
+  } else {
+    this.sfxConfig.globalPrefix += '.';
+  }
 
   this.sfxConfig.http = http;
   this.sfxConfig.onComplete = this.onComplete;
@@ -144,7 +150,7 @@ SignalFuseBackend.prototype.transformTimerData = function(timerData) {
       for(subKey in timerData[rawKey]) {
         if(timerData[rawKey].hasOwnProperty(subKey)) {
           var val = timerData[rawKey][subKey];
-          var fqMetricName = [globalPrefix, keyName, subKey].join('.');
+          var fqMetricName = globalPrefix + [keyName, subKey].join('.');
           resultingStats.push(buildStat(fqMetricName, val, tags));
         }
       }
@@ -174,7 +180,7 @@ SignalFuseBackend.prototype.transformTimers = function(timers) {
       var tags = metricParts['tags'];
       tags['type'] = 'timer';
 
-      var fqMetricName = [globalPrefix, keyName].join('.')
+      var fqMetricName = globalPrefix + keyName;
       var events = timers[rawKey];
       for(var i = 0; i < events.length; i++){
         resultingStats.push(buildStat(fqMetricName, events[i], tags));
@@ -208,7 +214,7 @@ SignalFuseBackend.prototype.transformMetrics = function(metrics, type) {
       var tags = metricParts['tags'];
       tags['type'] = type;
 
-      var fqMetricName = [globalPrefix, keyName].join('.');
+      var fqMetricName = globalPrefix + keyName;
       resultingStats.push(buildStat(fqMetricName, value, tags));
     }
   }
@@ -267,7 +273,6 @@ SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
     var req = sfxConfig.http.request(postOptions, sfxConfig.onComplete);
     req.write(postData);
     req.end();
-    l.debug(req.output);
   } else {
     l.log('Not sending because of dryrun flag. request:');
     l.log(postData);

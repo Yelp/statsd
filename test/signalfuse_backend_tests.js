@@ -1,4 +1,4 @@
-var sfx = require('../backends/sfx_replace.js');
+var sfx = require('../backends/signalfuse.js');
 
 // generic configuration
 function createConfig() {
@@ -7,7 +7,6 @@ function createConfig() {
     flush_counts: true,
     signalfuse: {
       host: "sfxhost",
-      port: 33333,
       token: "there are many tokens, but this one is mine",
       globalPrefix: "sfx_test"
     }
@@ -54,8 +53,8 @@ function createFakeRequest() {
     write: function(asString) {
       this.logCall('write', [asString]);
     },
-    done: function() {
-      this.logCall('done', []);
+    end: function() {
+      this.logCall('end', []);
     }
   };
 
@@ -355,7 +354,7 @@ module.exports.testPost = function(test) {
       postcb = callback;
       expectedRequestsMade += 1;
       return fakeRequest;
-    }
+    },
   };
 
   var metricList = [
@@ -373,13 +372,12 @@ module.exports.testPost = function(test) {
 
   test.equal(expectedRequestsMade, 1,
             "Created the wrong number of requests: " + expectedRequestsMade);
-  test.equal(fakeRequest.callToCount['done'], 1);
+  test.equal(fakeRequest.callToCount['end'], 1);
   test.equal(fakeRequest.callToCount['write'], 1);
   test.equal(fakeRequest.callToArgs['write'][0], JSON.stringify(expectedPostData));
 
   checkTwoMaps(test, postOptions, {
     host: 'sfxhost',
-    port: 33333,
     method: 'POST',
     path: '/v2/datapoint',
     headers: {
@@ -427,9 +425,26 @@ module.exports.testEndToEnd = function(test) {
   inst.getConfig().http = fakeHttp;
   emitter['flush'](123, input);
 
-  test.equal(fakeRequest.callToCount['done'], 1);
+  test.equal(fakeRequest.callToCount['end'], 1);
   test.equal(fakeRequest.callToCount['write'], 1);
 //  test.equal(fakeRequest.callToArgs['write'][0], JSON.stringify(expectedPostData));
 
+  test.done();
+}
+
+module.exports.testGlobalPrefix = function(test) {
+  var config = createConfig();
+  config.signalfuse.globalPrefix = "something";
+
+  var newconfig = sfx.init(0, config, createEmitter(), getLogger()).getConfig();
+  test.equal(newconfig.globalPrefix, 'something.');
+
+  config.signalfuse.globalPrefix = "";
+  newconfig = sfx.init(0, config, createEmitter(), getLogger()).getConfig();
+  test.equal(newconfig.globalPrefix, '', 'Got "' + newconfig.globalPrefix + '" expected:' + "''");
+
+  config.signalfuse.globalPrefix = undefined;
+  newconfig = sfx.init(0, config, createEmitter(), getLogger()).getConfig();
+  test.equal(newconfig.globalPrefix, '', 'Got "' + newconfig.globalPrefix + '" expected:' + "''");
   test.done();
 }
