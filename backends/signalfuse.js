@@ -11,10 +11,12 @@
  *
  *  {
  *    ...
+ *    debug: true,
  *    signalfuse: {
  *      host: "",
  *      token: "",
- *      globalPrefix: ""
+ *      globalPrefix: "",
+ *      useMultiKey: true
  *    }
  *  }
  *
@@ -44,9 +46,14 @@ function SignalFuseBackend(startup_time, config, emitter) {
   var c = config.signalfuse || {};
 
   this.sfxConfig = c;
-  this.sfxConfig.dryrun = this.sfxConfig.dryrun || false;
   this.sfxConfig.host = this.sfxConfig.host || "";
   this.sfxConfig.token = this.sfxConfig.token || "";
+
+  if(this.sfxConfig.dryrun == undefined)
+    this.sfxConfig.dryrun = false;
+
+  if(this.sfxConfig.useMultiKey == undefined)
+    this.sfxConfig.useMultiKey = true;
 
   // add the '.' so that we can just jam keys onto the end
   if(this.sfxConfig.globalPrefix == "" || this.sfxConfig.globalPrefix === undefined) {
@@ -85,6 +92,35 @@ SignalFuseBackend.prototype.onComplete = function(rsp) {
 }
 
 //
+// Parses the key into its metric name and actual tags
+// The expected format is a JSON list of tuples: (key, value)
+// For example::
+//
+//    [
+//        [
+//            "metric_name",
+//            "myname"
+//        ],
+//        [
+//            "sometag",
+//            "tagsval"
+//        ]
+//    ]
+//
+// The name 'metric_name' is reserved to mean exactly what it says
+SignalFuseBackend.prototype.parseMultiKey = function(stringKey) {
+  var parsed = JSON.parse(stringKey);
+  var mapVersion = {};
+  parsed.forEach(function(item) {
+    mapVersion[item[0]] = item[1];
+  });
+  mname = mapVersion['metric_name'];
+  delete mapVersion['metric_name'];
+  return {metric_name: mname, tags: mapVersion};
+}
+
+
+//
 // This is intended to split the key itself into its tags and name
 // some rules::
 //
@@ -98,31 +134,39 @@ SignalFuseBackend.prototype.onComplete = function(rsp) {
 //    - if they contain an '=' they are a tag
 //    - otherwise they are part of the name
 //
+// UNLESS the 'useMultiKey' config value is enabled. Then it is parsed
+// according to those rules. See 'parseMultiKey'
 //
 SignalFuseBackend.prototype.parseKey = function(rawkey) {
   var metricName = "";
   var tags = {}
 
-  var cleanerKey = rawkey.replace(/\s+/g, '_')
-                         .replace(/\//g, '-')
-                         .replace(/[^a-zA-Z_\-0-9=\.]/g, '');
+  if (this.sfxConfig.useMultiKey == true) {
+    var parsed = this.parseMultiKey(rawkey);
+    metricName = parsed['metric_name'];
+    tags = parsed['tags'];
+  } else {
+    var cleanerKey = rawkey.replace(/\s+/g, '_')
+                           .replace(/\//g, '-')
+                           .replace(/[^a-zA-Z_\-0-9=\.]/g, '');
 
-  parts = cleanerKey.split('.');
-  metricParts = [parts[0]];
-  if(metricParts[0].indexOf('=') >= 0) {
-    return {}; // can't start with an '=' in it
-  }
-
-  for (i = 1; i < parts.length; i++) {
-    if(parts[i].indexOf('=') >= 0) {
-      var tagParts = parts[i].split('=');
-      tags[tagParts[0]] = tagParts[1];
-    } else {
-      metricParts.push(parts[i]);
+    parts = cleanerKey.split('.');
+    metricParts = [parts[0]];
+    if(metricParts[0].indexOf('=') >= 0) {
+      return {}; // can't start with an '=' in it
     }
-  }
 
-  metricName = metricParts.join('.');
+    for (i = 1; i < parts.length; i++) {
+      if(parts[i].indexOf('=') >= 0) {
+        var tagParts = parts[i].split('=');
+        tags[tagParts[0]] = tagParts[1];
+      } else {
+        metricParts.push(parts[i]);
+      }
+    }
+
+    metricName = metricParts.join('.');
+  }
 
   return {metricName: metricName, tags: tags};
 }

@@ -8,7 +8,8 @@ function createConfig() {
     signalfuse: {
       host: "sfxhost",
       token: "there are many tokens, but this one is mine",
-      globalPrefix: "sfx_test"
+      globalPrefix: "sfx_test",
+      useMultiKey: false
     }
   };
 }
@@ -74,7 +75,12 @@ function checkYourself(test, actualMetricList, expectedMetricList) {
 
   for (var k = 0; k < actualMetricList.length; k++) {
     var m = actualMetricList[k];
-    test.deepEqual(m, expectedMap[m['metric']]);
+    var expected = expectedMap[m['metric']];
+    test.ok(expected != undefined, 'No expected metric for name ' + m['metric']);
+
+    test.equal(m['metric'], expected['metric']);
+    test.equal(m['value'], expected['value']);
+    test.deepEqual(m['dimensions'], expected['dimensions']);
   }
 }
 
@@ -94,6 +100,19 @@ function checkTwoMaps(test, actualMap, expectedMap) {
       }
     }
   }
+}
+
+function createEmptyEmission() {
+  return {
+    counters: { },
+    gauges: { },
+    timers: { },
+    sets: { },
+    counter_rates: { },
+    timer_data: { },
+    statsd_metrics: { },
+    pctThreshold: 42
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -447,4 +466,55 @@ module.exports.testGlobalPrefix = function(test) {
   newconfig = sfx.init(0, config, createEmitter(), getLogger()).getConfig();
   test.equal(newconfig.globalPrefix, '', 'Got "' + newconfig.globalPrefix + '" expected:' + "''");
   test.done();
+}
+
+module.exports.testMultiKeyParsing = function(test) {
+  var expected_name =  'metric';
+  var expected = {
+    test: 'test',
+    spanks: 'approved'
+  };
+  var input = '[["metric_name", "metric"], ["test", "test"], ["spanks", "approved"]]';
+
+  var inst = sfx.init(0, createConfig(), createEmitter(), getLogger());
+  var actual = inst.parseMultiKey(input);
+
+  test.equal(actual['metric_name'], expected_name);
+  Object.keys(expected).forEach(function(ekey) {
+    test.equal(actual['tags'][ekey], expected[ekey]);
+  });
+
+  test.done();
+}
+
+module.exports.testWithMultiKey = function(test) {
+  var expected = {
+    metric_name: 'metric',
+    test: 'test',
+    spanks: 'approved'
+  };
+
+  var m = createEmptyEmission();
+  m.counters['[["metric_name", "metric"], ["test", "test"], ["spanks", "approved"]]'] = 13;
+  var expectedMetrics = [
+    {metric: 'sfx_test.metric', value: 13, dimensions: {test: "test", spanks: "approved", type: "counter"}},
+  ];
+  var results = []
+  var collector = function(metricsToSend) {
+    Array.prototype.push.apply(results, metricsToSend);
+  }
+
+  var emitter = createEmitter();
+  var config = createConfig();
+  config.signalfuse.useMultiKey = true;
+
+  var inst = sfx.init(0, config, emitter, getLogger());
+  inst.post = collector;
+
+  // use the emitter b/c it is what is *really* called
+  emitter.flush(123, m);
+
+  checkYourself(test, results, expectedMetrics);
+
+  test.done()
 }
