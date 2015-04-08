@@ -109,7 +109,14 @@ SignalFuseBackend.prototype.onComplete = function(rsp) {
 //
 // The name 'metric_name' is reserved to mean exactly what it says
 SignalFuseBackend.prototype.parseMultiKey = function(stringKey) {
-  var parsed = JSON.parse(stringKey);
+  var parsed = undefined
+  try {
+    parsed = JSON.parse(stringKey);
+  } catch(err) {
+    l.debug("Failed to parse '" + stringKey + "' into valid JSON");
+    return undefined
+  }
+
   var mapVersion = {};
   parsed.forEach(function(item) {
     mapVersion[item[0]] = item[1];
@@ -141,11 +148,15 @@ SignalFuseBackend.prototype.parseKey = function(rawkey) {
   var metricName = "";
   var tags = {}
 
-  if (this.sfxConfig.useMultiKey == true) {
+  if(this.sfxConfig.useMultiKey == true) {
     var parsed = this.parseMultiKey(rawkey);
-    metricName = parsed['metric_name'];
-    tags = parsed['tags'];
-  } else {
+    if(parsed != undefined) {
+      metricName = parsed['metric_name'];
+      tags = parsed['tags'];
+    }
+  }
+
+  if(metricName == "") {
     var cleanerKey = rawkey.replace(/\s+/g, '_')
                            .replace(/\//g, '-')
                            .replace(/[^a-zA-Z_\-0-9=\.]/g, '');
@@ -156,7 +167,7 @@ SignalFuseBackend.prototype.parseKey = function(rawkey) {
       return {}; // can't start with an '=' in it
     }
 
-    for (i = 1; i < parts.length; i++) {
+    for(i = 1; i < parts.length; i++) {
       if(parts[i].indexOf('=') >= 0) {
         var tagParts = parts[i].split('=');
         tags[tagParts[0]] = tagParts[1];
@@ -226,7 +237,7 @@ SignalFuseBackend.prototype.transformTimers = function(timers) {
 
       var fqMetricName = globalPrefix + keyName;
       var events = timers[rawKey];
-      for(var i = 0; i < events.length; i++){
+      for(var i = 0; i < events.length; i++) {
         resultingStats.push(buildStat(fqMetricName, events[i], tags));
       }
     }
@@ -313,7 +324,7 @@ SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
 
   l.debug('Payload will be: ' + util.inspect(out, {depth:5, colors:true}));
 
-  if (!sfxConfig.dryrun) {
+  if(!sfxConfig.dryrun) {
     var req = sfxConfig.http.request(postOptions, sfxConfig.onComplete);
     req.write(postData);
     req.end();

@@ -496,8 +496,11 @@ module.exports.testWithMultiKey = function(test) {
 
   var m = createEmptyEmission();
   m.counters['[["metric_name", "metric"], ["test", "test"], ["spanks", "approved"]]'] = 13;
+  m.counters['not.a.json.name'] = 234;
+
   var expectedMetrics = [
     {metric: 'sfx_test.metric', value: 13, dimensions: {test: "test", spanks: "approved", type: "counter"}},
+    {metric: 'sfx_test.not.a.json.name', value: 234, dimensions: {type: "counter"}},
   ];
   var results = []
   var collector = function(metricsToSend) {
@@ -517,4 +520,15 @@ module.exports.testWithMultiKey = function(test) {
   checkYourself(test, results, expectedMetrics);
 
   test.done()
+}
+
+module.exports.testWithMultiKeyUsingSimpleKey = function(test) {
+  var input = 'this.is.not.json';
+
+  var inst = sfx.init(0, createConfig(), createEmitter(), getLogger());
+  var actual = inst.parseMultiKey(input);
+
+  test.equal(actual, undefined);
+
+  test.done();
 }
