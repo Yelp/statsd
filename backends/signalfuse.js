@@ -337,7 +337,7 @@ SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
 }
 
 SignalFuseBackend.prototype.status = function(callback) {
-    callback.write(0, "Not yet implemented");
+  callback('not yet implemented', 'signalfuse');
 }
 
 // ---------------------------------------------------------------------------
