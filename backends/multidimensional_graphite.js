@@ -1,11 +1,12 @@
+var util = require('util');
+var events = require('events');
+
 var log = console; // the logger
 var debug;
 
-var events = require('events');
-
 
 function MultiDimensionalGraphite(startupTime, config, serverEmitter) {
-  log.info('Starting up Multidimensional Graphite instance at ' + startupTime);
+  log.log('Starting up Multidimensional Graphite instance at ' + startupTime);
 
   this.config = config;
   this.innerEmitter = new events.EventEmitter();
@@ -14,8 +15,11 @@ function MultiDimensionalGraphite(startupTime, config, serverEmitter) {
   var self = this;
 
   serverEmitter.on('flush', function(ts, metrics) {
+    log.debug('Transforming \n' + util.inspect(metrics, {depth:5, colors: true}))
     var transdmetrics = self.transformMetrics(metrics);
-    self.innerEmitter.emit('flush', transdmetrics);
+    log.debug('Finished transforming result is \n' + util.inspect(transdmetrics, {depth:5, colors: true}))
+
+    self.innerEmitter.emit('flush', ts, transdmetrics);
   });
 };
 
@@ -102,7 +106,7 @@ exports.init = function graphite_init(startupTime, config, events, logger) {
   log = logger;
   log.__proto__.debug = function(msg) {
     if(debug) {
-      l.log(msg);
+      log.log(msg);
     }
   };
 
