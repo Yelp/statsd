@@ -346,11 +346,6 @@ SignalFuseBackend.prototype.status = function(callback) {
 exports.init = function(startup_time, config, events, logger) {
   debug = config.debug;
   l = logger;
-  l.__proto__.debug = function(msg) {
-    if(debug) {
-      l.log(msg);
-    }
-  };
 
   var instance = new SignalFuseBackend(startup_time, config, events);
   return instance;
