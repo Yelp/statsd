@@ -322,10 +322,16 @@ SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
   var out = {gauge: metricList};
   var postData = JSON.stringify(out);
 
-  l.debug('Payload will be: ' + util.inspect(out, {depth:5, colors:true}));
+  l.debug('Payload will be:\n' + util.inspect(out, {depth:5, colors:true}));
 
   if(!sfxConfig.dryrun) {
     var req = sfxConfig.http.request(postOptions, sfxConfig.onComplete);
+    req.on('error', function(res) {
+      log.log("Somethign went terribly wrong trying to send data to signalfx");
+      log.log("Payload:\n" + util.inspect(out, {depth:5, colors:true}));
+      log.log("Error:" + util.inspect(res, {depth:5, colors:true}));
+    });
+
     req.write(postData);
     req.end();
   } else {
@@ -346,11 +352,6 @@ SignalFuseBackend.prototype.status = function(callback) {
 exports.init = function(startup_time, config, events, logger) {
   debug = config.debug;
   l = logger;
-  l.__proto__.debug = function(msg) {
-    if(debug) {
-      l.log(msg);
-    }
-  };
 
   var instance = new SignalFuseBackend(startup_time, config, events);
   return instance;
