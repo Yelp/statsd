@@ -58,7 +58,9 @@ function loadBackend(config, name) {
       origLogger.log(logPrefix + ": " + msg, type);
     },
     debug: function(msg) {
-      origLogger.log(logPrefix + ": " + msg, 'DEBUG');
+      if(config.debug) {
+        origLogger.log(logPrefix + ": " + msg, 'DEBUG');
+      }
     },
     info: function(msg) {
       origLogger.log(logPrefix + ": " + msg, 'INFO');
