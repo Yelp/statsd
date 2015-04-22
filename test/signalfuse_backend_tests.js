@@ -16,8 +16,11 @@ function createConfig() {
 
 // squash the output
 function getLogger() {
-  return { log: function(msg, level) { ; } }
-  //return console;
+  return {
+    log: function(msg, level) { ; },
+    info: function(msg) { ; },
+    debug: function(msg) { ; }
+  }
 }
 
 function buildStat(name, value, tags) {
@@ -50,6 +53,9 @@ function createFakeRequest() {
       var callCount = this.callToCount[methodname] || 0;
       callCount += 1;
       this.callToCount[methodname] = callCount;
+    },
+    on: function(handle, fcn) {
+      this.logCall('on', handle)
     },
     write: function(asString) {
       this.logCall('write', [asString]);
@@ -476,8 +482,7 @@ module.exports.testMultiKeyParsing = function(test) {
   };
   var input = '[["metric_name", "metric"], ["test", "test"], ["spanks", "approved"]]';
 
-  var inst = sfx.init(0, createConfig(), createEmitter(), getLogger());
-  var actual = inst.parseMultiKey(input);
+  var actual = sfx.prototype.parseMultiKey(input);
 
   test.equal(actual['metric_name'], expected_name);
   Object.keys(expected).forEach(function(ekey) {
@@ -525,8 +530,7 @@ module.exports.testWithMultiKey = function(test) {
 module.exports.testWithMultiKeyUsingSimpleKey = function(test) {
   var input = 'this.is.not.json';
 
-  var inst = sfx.init(0, createConfig(), createEmitter(), getLogger());
-  var actual = inst.parseMultiKey(input);
+  var actual = sfx.prototype.parseMultiKey(input);
 
   test.equal(actual, undefined);
 
