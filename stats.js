@@ -39,7 +39,35 @@ function loadBackend(config, name) {
     l.log("Loading backend: " + name, 'DEBUG');
   }
 
-  var ret = backendmod.init(startup_time, config, backendEvents, l);
+  hostname = "";
+  backendname = name
+  try {
+    hostname = require('os').hostname();
+    backendname = require('path').basename(name);
+  } catch(err) {
+    if(config.debug) {
+      l.log("Failed to load the hostname for the log", "ERROR");
+      l.log(err);
+    }
+  }
+
+  var origLogger = l;
+  var logPrefix = hostname + " " + backendname;
+  var backendLogger = {
+    log: function(msg, type) {
+      origLogger.log(logPrefix + ": " + msg, type);
+    },
+    debug: function(msg) {
+      if(config.debug) {
+        origLogger.log(logPrefix + ": " + msg, 'DEBUG');
+      }
+    },
+    info: function(msg) {
+      origLogger.log(logPrefix + ": " + msg, 'INFO');
+    }
+  }
+
+  var ret = backendmod.init(startup_time, config, backendEvents, backendLogger);
   if (!ret) {
     l.log("Failed to load backend: " + name);
     process.exit(1);
