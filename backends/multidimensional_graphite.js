@@ -1,9 +1,46 @@
-var util = require('util');
-var events = require('events');
+var util = require('util')
+  , events = require('events')
+  , logger = require('../lib/logger')
+  , getHostname = require('os').hostname
+  , getBasename = require('path').basename;
 
 var log = console; // the logger
 var debug;
 
+
+function  createBackendLogger(config, logger) {
+  hostname = "";
+  backendname = __filename;
+  try {
+    hostname = getHostname();
+    backendname = getBasename(__filename);
+  } catch(err) {
+    if(config.debug) {
+      logger.log("Failed to load the hostname for the log", "ERROR");
+      logger.log(err);
+    }
+  }
+
+  var logPrefix = hostname + " " + backendname;
+  var backendLogger = {
+    log: function(msg, type) {
+      logger.log(logPrefix + ": " + msg, type);
+    },
+    debug: function(msg) {
+      if(config.debug) {
+        logger.log(logPrefix + ": " + msg, 'DEBUG');
+      }
+    },
+    info: function(msg) {
+      logger.log(logPrefix + ": " + msg, 'INFO');
+    },
+    error: function(msg) {
+      logger.log(logPrefix + ": " + msg, 'ERROR');
+    }
+  }
+
+  return backendLogger;
+}
 
 function MultiDimensionalGraphite(startupTime, config, serverEmitter) {
   log.log('Starting up Multidimensional Graphite instance at ' + startupTime);
@@ -15,9 +52,9 @@ function MultiDimensionalGraphite(startupTime, config, serverEmitter) {
   var self = this;
 
   serverEmitter.on('flush', function(ts, metrics) {
-    log.debug('Transforming \n' + util.inspect(metrics, {depth:5, colors: true}))
+    log.debug('Transforming \n' + util.inspect(metrics, {depth:5, colors: true}));
     var transdmetrics = self.transformMetrics(metrics);
-    log.debug('Finished transforming result is \n' + util.inspect(transdmetrics, {depth:5, colors: true}))
+    log.debug('Finished transforming result is \n' + util.inspect(transdmetrics, {depth:5, colors: true}));
 
     self.innerEmitter.emit('flush', ts, transdmetrics);
   });
@@ -36,7 +73,7 @@ function MultiDimensionalGraphite(startupTime, config, serverEmitter) {
  *  - if the key from 'graphite_keys' DNE
  */
 MultiDimensionalGraphite.prototype.transformKey = function(name) {
-  var parsed = undefined
+  var parsed = undefined;
   try {
     parsed = JSON.parse(name);
   } catch(err) {
@@ -101,14 +138,9 @@ MultiDimensionalGraphite.prototype.transformMetrics = function(metrics) {
 
 exports.multid_prototype = MultiDimensionalGraphite.prototype;
 
-exports.init = function graphite_init(startupTime, config, events, logger) {
-  debug = config.debug;
-  log = logger;
-  log.__proto__.debug = function(msg) {
-    if(debug) {
-      log.log(msg);
-    }
-  };
+exports.init = function graphite_init(startup_time, config, events, logger) {
 
-  return new MultiDimensionalGraphite(startupTime, config, events);
+  log = createBackendLogger(config, logger);
+
+  return new MultiDimensionalGraphite(startup_time, config, events);
 };

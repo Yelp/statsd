@@ -22,7 +22,7 @@ function createEmitter() {
   var emitter = {
     on: function(key, listener) {
       // when a method is reg'd add it in so we can call it directly
-      this.__proto__[key] = listener;
+      this[key] = listener;
     }
   };
   return emitter;
