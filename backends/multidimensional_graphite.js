@@ -1,46 +1,11 @@
 var util = require('util')
   , events = require('events')
+  , createBackendLogger = require('../lib/logging_utils')
   , logger = require('../lib/logger')
-  , getHostname = require('os').hostname
-  , getBasename = require('path').basename;
 
 var log = console; // the logger
 var debug;
 
-
-function  createBackendLogger(config, logger) {
-  hostname = "";
-  backendname = __filename;
-  try {
-    hostname = getHostname();
-    backendname = getBasename(__filename);
-  } catch(err) {
-    if(config.debug) {
-      logger.log("Failed to load the hostname for the log", "ERROR");
-      logger.log(err);
-    }
-  }
-
-  var logPrefix = hostname + " " + backendname;
-  var backendLogger = {
-    log: function(msg, type) {
-      logger.log(logPrefix + ": " + msg, type);
-    },
-    debug: function(msg) {
-      if(config.debug) {
-        logger.log(logPrefix + ": " + msg, 'DEBUG');
-      }
-    },
-    info: function(msg) {
-      logger.log(logPrefix + ": " + msg, 'INFO');
-    },
-    error: function(msg) {
-      logger.log(logPrefix + ": " + msg, 'ERROR');
-    }
-  }
-
-  return backendLogger;
-}
 
 function MultiDimensionalGraphite(startupTime, config, serverEmitter) {
   log.log('Starting up Multidimensional Graphite instance at ' + startupTime);
@@ -140,7 +105,7 @@ exports.multid_prototype = MultiDimensionalGraphite.prototype;
 
 exports.init = function graphite_init(startup_time, config, events, logger) {
 
-  log = createBackendLogger(config, logger);
+  log = createBackendLogger('multidimensions-graphite', config.debug, logger);
 
   return new MultiDimensionalGraphite(startup_time, config, events);
 };

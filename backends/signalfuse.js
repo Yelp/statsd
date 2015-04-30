@@ -22,8 +22,9 @@
  *
  */
 
-var http = require('https');
-var util = require('util');
+var http = require('https')
+  , util = require('util')
+  , createBackendLogger = require('../lib/logging_utils');
 
 var log; // the logger
 var debug;
@@ -352,7 +353,7 @@ SignalFuseBackend.prototype.status = function(callback) {
 exports.prototype = SignalFuseBackend.prototype
 exports.init = function(startup_time, config, events, logger) {
   debug = config.debug;
-  log = logger;
+  log = createBackendLogger('signalfuse', config.debug, logger)
 
   var instance = new SignalFuseBackend(startup_time, config, events);
   return instance;
