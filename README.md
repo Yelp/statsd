@@ -116,5 +116,5 @@ Meta
 [docs_backend_interface]: https://github.com/etsy/statsd/blob/master/docs/backend_interface.md
 [docs_namespacing]: https://github.com/etsy/statsd/blob/master/docs/namespacing.md
 [docs_cluster_proxy]: https://github.com/etsy/statsd/blob/master/docs/cluster_proxy.md
-[travis-ci_status_img]: https://travis-ci.org/etsy/statsd.svg?branch=master
-[travis-ci_statsd]: https://travis-ci.org/etsy/statsd
+[travis-ci_status_img]: https://travis-ci.org/Yelp/statsd.svg?branch=master
+[travis-ci_statsd]: https://travis-ci.org/Yelp/statsd
