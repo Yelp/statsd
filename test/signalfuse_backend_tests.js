@@ -16,11 +16,7 @@ function createConfig() {
 
 // squash the output
 function getLogger() {
-  return {
-    log: function(msg, level) { ; },
-    info: function(msg) { ; },
-    debug: function(msg) { ; }
-  }
+  return { log: function(msg, level) { ; } }
 }
 
 function buildStat(name, value, tags) {
