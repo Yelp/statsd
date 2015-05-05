@@ -5,7 +5,7 @@ try {
 catch(e) {
     console.log("Cannot find nodeunit module.");
     console.log("Make sure to run 'npm install nodeunit'");
-    process.exit();
+    process.exit(1);
 }
 
 process.chdir(__dirname);
