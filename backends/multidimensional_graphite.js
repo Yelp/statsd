@@ -64,7 +64,7 @@ MultiDimensionalGraphite.prototype.transformKey = function(name) {
         '", \nmissing value at key: "' + part + '"');
       return;
     } else {
-      finalKeys.push([part, val].join('='));
+      finalKeys.push([part, val].join('.'));
     }
   });
 
