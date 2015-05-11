@@ -80,7 +80,7 @@ module.exports.testKeyTransformation = function(test) {
     ["port", "someport"] \
     ]';
   actual = proto.transformKey(testVal);
-  test.equal(actual, 'host=somehost.port=someport');
+  test.equal(actual, 'host.somehost.port.someport');
 
   test.done();
 };
@@ -142,19 +142,19 @@ module.exports.testTransformation = function(test) {
   var expected= {
     counters: {
       'statsd.bad_lines_seen': 1,
-      'host=myhost.port=23.package=somepackage': 200
+      'host.myhost.port.23.package.somepackage': 200
     },
     timers: {
-      'host=timerhost.port=342.package=timerpackage': [2, 3, 4]
+      'host.timerhost.port.342.package.timerpackage': [2, 3, 4]
     },
     gauges: {
-      'host=gaugehost.port=546.package=gaugepackage': 222
+      'host.gaugehost.port.546.package.gaugepackage': 222
     },
     sets: {
-      'host=sethost.port=546.package=setpackage': 222
+      'host.sethost.port.546.package.setpackage': 222
     },
     timer_data: {
-      'host=timerhost.port=342.package=timerpackage': {
+      'host.timerhost.port.342.package.timerpackage': {
         count_90: 1,
         mean_90: 2,
         upper_90: 3,
@@ -163,7 +163,7 @@ module.exports.testTransformation = function(test) {
     },
     counter_rates: {
       'statsd.bad_lines_seen': 1,
-      'host=myhost.port=23.package=somepackage': 0.1
+      'host.myhost.port.23.package.somepackage': 0.1
     },
     pctThreshold: [90]
   };
