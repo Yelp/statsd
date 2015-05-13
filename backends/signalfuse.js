@@ -114,7 +114,6 @@ SignalFuseBackend.prototype.parseMultiKey = function(stringKey) {
   try {
     parsed = JSON.parse(stringKey);
   } catch(err) {
-    log.debug("Failed to parse '" + stringKey + "' into valid JSON");
     return undefined
   }
 
@@ -196,21 +195,28 @@ SignalFuseBackend.prototype.transformTimerData = function(timerData) {
   var globalPrefix = this.sfxConfig.globalPrefix;
   var resultingStats = [];
 
-  for(rawKey in timerData) {
-    if(timerData.hasOwnProperty(rawKey)) {
-      var metricParts = this.parseKey(rawKey);
-      var keyName = metricParts['metricName'];
-      var tags = metricParts['tags'];
-      tags['type'] = 'timerdata';
+  try {
+    for(rawKey in timerData) {
+      if(timerData.hasOwnProperty(rawKey)) {
+        var metricParts = this.parseKey(rawKey);
+        var keyName = metricParts['metricName'];
+        var tags = metricParts['tags'];
+        tags['type'] = 'timerdata';
 
-      for(subKey in timerData[rawKey]) {
-        if(timerData[rawKey].hasOwnProperty(subKey)) {
-          var val = timerData[rawKey][subKey];
-          var fqMetricName = globalPrefix + [keyName, subKey].join('.');
-          resultingStats.push(buildStat(fqMetricName, val, tags));
+        for(subKey in timerData[rawKey]) {
+          if(timerData[rawKey].hasOwnProperty(subKey)) {
+            var val = timerData[rawKey][subKey];
+            var fqMetricName = globalPrefix + [keyName, subKey].join('.');
+            resultingStats.push(buildStat(fqMetricName, val, tags));
+          }
         }
       }
     }
+  } catch(err) {
+    log.log("ERROR: in transformTimerData\n" +
+            util.inspect(err, {depth:5, colors:true}) +
+           "\ninput\n" +
+            util.inspect(timerData, {depth:5, colors:true}));
   }
 
   return resultingStats;
@@ -229,23 +235,30 @@ SignalFuseBackend.prototype.transformTimers = function(timers) {
   var globalPrefix = this.sfxConfig.globalPrefix;
   var resultingStats = [];
 
-  for(rawKey in timers) {
-    if(timers.hasOwnProperty(rawKey)) {
-      var metricParts = this.parseKey(rawKey);
-      var keyName = metricParts['metricName'];
-      var tags = metricParts['tags'];
-      tags['type'] = 'timer';
+  try {
+    for(rawKey in timers) {
+      if(timers.hasOwnProperty(rawKey)) {
+        var metricParts = this.parseKey(rawKey);
+        var keyName = metricParts['metricName'];
+        var tags = metricParts['tags'];
+        tags['type'] = 'timer';
 
-      var fqMetricName = globalPrefix + keyName;
-      var events = timers[rawKey];
-      for(var i = 0; i < events.length; i++) {
-        resultingStats.push(buildStat(fqMetricName, events[i], tags));
+        var fqMetricName = globalPrefix + keyName;
+        var events = timers[rawKey];
+        for(var i = 0; i < events.length; i++) {
+          resultingStats.push(buildStat(fqMetricName, events[i], tags));
+        }
       }
     }
-  }
 
-  log.debug("Finished transforming metrics into " +
-          resultingStats.length + " signalfuse metrics");
+    log.debug("Finished transforming metrics into " +
+            resultingStats.length + " signalfuse metrics");
+  } catch(err) {
+    log.log("ERROR: in transformTimers\n" +
+            util.inspect(err, {depth:5, colors:true}) +
+           "\ninput\n" +
+            util.inspect(timers, {depth:5, colors:true}));
+  }
 
   return resultingStats;
 }
@@ -261,22 +274,29 @@ SignalFuseBackend.prototype.transformMetrics = function(metrics, type) {
   var globalPrefix = this.sfxConfig.globalPrefix;
   var resultingStats = [];
 
-  for(rawKey in metrics) {
-    if(metrics.hasOwnProperty(rawKey)) {
-      var value = metrics[rawKey];
+  try {
+    for(rawKey in metrics) {
+      if(metrics.hasOwnProperty(rawKey)) {
+        var value = metrics[rawKey];
 
-      var metricParts = this.parseKey(rawKey);
-      var keyName = metricParts['metricName'];
-      var tags = metricParts['tags'];
-      tags['type'] = type;
+        var metricParts = this.parseKey(rawKey);
+        var keyName = metricParts['metricName'];
+        var tags = metricParts['tags'];
+        tags['type'] = type;
 
-      var fqMetricName = globalPrefix + keyName;
-      resultingStats.push(buildStat(fqMetricName, value, tags));
+        var fqMetricName = globalPrefix + keyName;
+        resultingStats.push(buildStat(fqMetricName, value, tags));
+      }
     }
-  }
 
-  log.debug("Finished transforming " + type + " into " +
-          resultingStats.length + " signalfuse metrics");
+    log.debug("Finished transforming " + type + " into " +
+            resultingStats.length + " signalfuse metrics");
+  } catch(err) {
+    log.log("ERROR: in transformMetrics with type " + type + "\n" +
+            util.inspect(err, {depth:5, colors:true}) +
+           "\ninput\n" +
+            util.inspect(metrics, {depth:5, colors:true}));
+  }
 
   return resultingStats;
 };
@@ -291,20 +311,27 @@ SignalFuseBackend.prototype.flush = function(timestamp, metric, postcb) {
   var resultingMetrics = [];
   var partial = [];
 
-  partial = this.transformMetrics(metric.counters, 'counter');
-  Array.prototype.push.apply(resultingMetrics, partial);
-  partial = this.transformMetrics(metric.sets, 'set');
-  Array.prototype.push.apply(resultingMetrics, partial);
-  partial = this.transformMetrics(metric.gauges, 'gauge');
-  Array.prototype.push.apply(resultingMetrics, partial);
-  partial = this.transformMetrics(metric.counter_rates, 'rate');
-  Array.prototype.push.apply(resultingMetrics, partial);
-  partial = this.transformTimers(metric.timers);
-  Array.prototype.push.apply(resultingMetrics, partial);
-  partial = this.transformTimerData(metric.timer_data);
-  Array.prototype.push.apply(resultingMetrics, partial);
+  try {
+    partial = this.transformMetrics(metric.counters, 'counter');
+    Array.prototype.push.apply(resultingMetrics, partial);
+    partial = this.transformMetrics(metric.sets, 'set');
+    Array.prototype.push.apply(resultingMetrics, partial);
+    partial = this.transformMetrics(metric.gauges, 'gauge');
+    Array.prototype.push.apply(resultingMetrics, partial);
+    partial = this.transformMetrics(metric.counter_rates, 'rate');
+    Array.prototype.push.apply(resultingMetrics, partial);
+    partial = this.transformTimers(metric.timers);
+    Array.prototype.push.apply(resultingMetrics, partial);
+    partial = this.transformTimerData(metric.timer_data);
+    Array.prototype.push.apply(resultingMetrics, partial);
 
-  postcb(resultingMetrics, this.sfxConfig);
+    postcb(resultingMetrics, this.sfxConfig);
+  } catch(err) {
+    log.log("ERROR: in flush\n" +
+            util.inspect(err, {depth:5, colors:true}) +
+           "\ninput\n" +
+            util.inspect(metric, {depth:5, colors:true}));
+  }
 }
 
 SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
@@ -323,24 +350,31 @@ SignalFuseBackend.prototype.post = function(metricList, sfxConfig) {
   var out = {gauge: metricList};
   var postData = JSON.stringify(out);
 
-  log.debug('Payload will be:\n' + util.inspect(out, {depth:5, colors:true}));
+  try {
+    log.debug('Payload will be:\n' + util.inspect(out, {depth:5, colors:true}));
 
-  if(!sfxConfig.dryrun) {
-    var req = sfxConfig.http.request(postOptions, sfxConfig.onComplete);
-    req.on('error', function(res) {
-      log.log("Somethign went terribly wrong trying to send data to signalfx");
-      log.log("Payload:\n" + util.inspect(out, {depth:5, colors:true}));
-      log.log("Error:" + util.inspect(res, {depth:5, colors:true}));
-    });
+    if(!sfxConfig.dryrun) {
+      var req = sfxConfig.http.request(postOptions, sfxConfig.onComplete);
+      req.on('error', function(res) {
+        log.log("Somethign went terribly wrong trying to send data to signalfx");
+        log.log("Payload:\n" + util.inspect(out, {depth:5, colors:true}));
+        log.log("Error:" + util.inspect(res, {depth:5, colors:true}));
+      });
 
-    req.write(postData);
-    req.end();
-  } else {
-    log.log('Not sending because of dryrun flag. request:');
-    log.log(postData);
+      req.write(postData);
+      req.end();
+    } else {
+      log.log('Not sending because of dryrun flag. request:');
+      log.log(postData);
+    }
+
+    log.debug('Finished sending data to signalfx');
+  } catch(err) {
+    log.log("ERROR: in post\n" +
+            util.inspect(err, {depth:5, colors:true}) +
+           "\ninput\n" +
+            util.inspect(metricList, {depth:5, colors:true}));
   }
-
-  log.debug('Finished sending data to signalfx');
 }
 
 SignalFuseBackend.prototype.status = function(callback) {
