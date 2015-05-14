@@ -327,6 +327,7 @@ config.configFile(process.argv[2], function (config) {
               }
             }
             stream.write("health: " + healthStatus + "\n");
+            stream.end();
             break;
 
           case "stats":

@@ -152,12 +152,12 @@ configlib.configFile(process.argv[2], function (conf, oldConfig) {
 
           break;
         case  "quit":
-          stream.end();
           break;
         default:
           stream.write("ERROR\n");
           break;
       }
+      stream.end();
     });
   });
 
