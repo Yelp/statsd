@@ -72,7 +72,7 @@ module.exports.testKeyTransformation = function(test) {
   actual = proto.transformKey(testVal);
   test.equal(actual, undefined);
 
-  // all parts present
+  // missing metric_name
   testVal =
     '[ \
     ["graphite_keys", "host;port"], \
@@ -80,7 +80,18 @@ module.exports.testKeyTransformation = function(test) {
     ["port", "someport"] \
     ]';
   actual = proto.transformKey(testVal);
-  test.equal(actual, 'host.somehost.port.someport');
+  test.equal(actual, undefined);
+
+  // all parts present
+  testVal =
+    '[ \
+    ["graphite_keys", "host;port"], \
+    ["host", "somehost"], \
+    ["port", "someport"], \
+    ["metric_name", "test_metric"] \
+    ]';
+  actual = proto.transformKey(testVal);
+  test.equal(actual, 'test_metric.host.somehost.port.someport');
 
   test.done();
 };
@@ -90,6 +101,7 @@ module.exports.testTransformation = function(test) {
     counters: {
       'statsd.bad_lines_seen': 1,
       '[["graphite_keys", "host;port;package"], \
+        ["metric_name", "test_metric"], \
         ["host", "myhost"], \
         ["package", "somepackage"], \
         ["port", "23"]\
@@ -97,6 +109,7 @@ module.exports.testTransformation = function(test) {
     },
     timers: {
       '[["graphite_keys", "host;port;package"], \
+        ["metric_name", "test_metric"], \
         ["host", "timerhost"], \
         ["package", "timerpackage"], \
         ["port", "342"]\
@@ -104,6 +117,7 @@ module.exports.testTransformation = function(test) {
     },
     gauges: {
       '[["graphite_keys", "host;port;package"], \
+        ["metric_name", "test_metric"], \
         ["host", "gaugehost"], \
         ["package", "gaugepackage"], \
         ["port", "546"]\
@@ -111,6 +125,7 @@ module.exports.testTransformation = function(test) {
     },
     sets: {
       '[["graphite_keys", "host;port;package"], \
+        ["metric_name", "test_metric"], \
         ["host", "sethost"], \
         ["package", "setpackage"], \
         ["port", "546"]\
@@ -118,6 +133,7 @@ module.exports.testTransformation = function(test) {
     },
     timer_data: {
       '[["graphite_keys", "host;port;package"], \
+        ["metric_name", "test_metric"], \
         ["host", "timerhost"], \
         ["package", "timerpackage"], \
         ["port", "342"]\
@@ -131,6 +147,7 @@ module.exports.testTransformation = function(test) {
     counter_rates: {
       'statsd.bad_lines_seen': 1,
       '[["graphite_keys", "host;port;package"], \
+        ["metric_name", "test_metric"], \
         ["host", "myhost"], \
         ["package", "somepackage"], \
         ["port", "23"]\
@@ -142,19 +159,19 @@ module.exports.testTransformation = function(test) {
   var expected= {
     counters: {
       'statsd.bad_lines_seen': 1,
-      'host.myhost.port.23.package.somepackage': 200
+      'test_metric.host.myhost.port.23.package.somepackage': 200
     },
     timers: {
-      'host.timerhost.port.342.package.timerpackage': [2, 3, 4]
+      'test_metric.host.timerhost.port.342.package.timerpackage': [2, 3, 4]
     },
     gauges: {
-      'host.gaugehost.port.546.package.gaugepackage': 222
+      'test_metric.host.gaugehost.port.546.package.gaugepackage': 222
     },
     sets: {
-      'host.sethost.port.546.package.setpackage': 222
+      'test_metric.host.sethost.port.546.package.setpackage': 222
     },
     timer_data: {
-      'host.timerhost.port.342.package.timerpackage': {
+      'test_metric.host.timerhost.port.342.package.timerpackage': {
         count_90: 1,
         mean_90: 2,
         upper_90: 3,
@@ -163,7 +180,7 @@ module.exports.testTransformation = function(test) {
     },
     counter_rates: {
       'statsd.bad_lines_seen': 1,
-      'host.myhost.port.23.package.somepackage': 0.1
+      'test_metric.host.myhost.port.23.package.somepackage': 0.1
     },
     pctThreshold: [90]
   };
