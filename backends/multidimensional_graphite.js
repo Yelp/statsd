@@ -36,6 +36,10 @@ function MultiDimensionalGraphite(startupTime, config, serverEmitter) {
  *
  * Errors which are *really* errors:
  *  - if the key from 'graphite_keys' DNE
+ *  - if the key 'metric_name' DNE
+ *  - empty JSON dictionary
+ *
+ *  Returns undefined if an error occours.
  */
 MultiDimensionalGraphite.prototype.transformKey = function(name) {
   var parsed = undefined;
@@ -44,6 +48,8 @@ MultiDimensionalGraphite.prototype.transformKey = function(name) {
   } catch(err) {
     return name;
   }
+
+  // Convert the JSON Object to a map
   var mapVersion = {};
   parsed.forEach(function(item) {
     mapVersion[item[0]] = item[1];
@@ -56,13 +62,22 @@ MultiDimensionalGraphite.prototype.transformKey = function(name) {
 
   finalKeys = [];
 
+  // The metric_name must be the first element in the output string
+  if ("metric_name" in mapVersion && mapVersion["metric_name"] != "") {
+    finalKeys.push(mapVersion["metric_name"]);
+  } else {
+    log.error('Poorly formed Key detected, missing metric_name tag. ' +
+              'Original key: ' + name);
+    return undefined;
+  }
+
   gKeys.split(';').forEach(function(part) {
     var val = mapVersion[part];
     if(val === undefined) {
       log.error('Poorly formed Key detected, original key: "' + name +
         '", \ngraphite_keys: "' + gKeys +
         '", \nmissing value at key: "' + part + '"');
-      return;
+      return undefined;
     } else {
       finalKeys.push([part, val].join('.'));
     }
@@ -79,12 +94,17 @@ MultiDimensionalGraphite.prototype.transformKey = function(name) {
 MultiDimensionalGraphite.prototype.transformMetrics = function(metrics) {
   var transMetrics = {};
   var transKey = this.transformKey;
+
+  // Receive a map of metrics and convert the keys to string
   var transObj = function(obj) {
     var finalObj = {};
     for(var k in obj) {
       if(obj.hasOwnProperty(k)) {
         var newKey = transKey(k);
-        finalObj[newKey] = obj[k];
+        // Only add newKey if it's not undefined
+        if (newKey) {
+          finalObj[newKey] = obj[k];
+        }
       }
     }
     return finalObj;
